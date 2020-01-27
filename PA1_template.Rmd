@@ -8,18 +8,130 @@ output:
 
 ## Loading and preprocessing the data
 
+  The goal of this project is to present some basic info and investigations into a sample of data concerning the walking habits of single person at all times throughout the day for a few months.
 
 
 ## What is mean total number of steps taken per day?
 
+  In this project we take a look at the subjects walking habits. The first step in this process is loading the data and building a data frame.
+
+```{r,echo=TRUE}
+  df <- read.csv("activity.csv",stringsAsFactors = FALSE)
+head(df)
+
+```
+  We can see the data has plenty of missing values in the steps variable just at the top. For now, we will omit them from our data. We load the dplyr package to create a histogram of the number of total number of steps taken by the participant during each day.
+
+```{r}
+library(dplyr)
+
+dframe1 <- df %>% filter(!is.na(steps)) %>% group_by(date) %>%
+  summarize(totalSteps = sum(steps))
+dframe1 <- data.frame(dframe1)
+  
+hist(dframe1$totalSteps,breaks = 30,main = "Histogram", xlab = "Total Steps")
+```
+  Later, we will compare this distribution to that when missing values are handled differently. Here are the mean and median of the total steps taken daily. Here, we can see that the total steps is concentrated around 10000 with heavy tails.
+
+```{r}
+mean(dframe1$totalSteps)
 
 
 ## What is the average daily activity pattern?
 
+The mean and median are close, which means that there aren't many outliers in the data and that it is fairly symmetric. Next, we consider the average number of steps based on the time of day, across all days, subdivided into five minute intervals.
 
+```{r}
+dframe2 <- df %>% filter(!is.na(steps)) %>% group_by(interval) %>%
+  summarize(meanSteps = mean(steps))
+
+dframe2 <- data.frame(dframe2)
+
+plot(dframe2$interval,dframe2$meanSteps, xlab = "Time (minutes)", ylab = "Mean Number of Steps", type = "l")
+```
+  From this we see several spikes in the subjects walking habits. The maximum mean number of steps at any time is
+  
+```{r}
+max(dframe2$meanSteps)
+```
 
 ## Imputing missing values
 
+As mentioned earlier, missing values may affect what observations we may make. One way to address this is to fill them in, rather than omit them. We create the same histogram as the first, but with NA values included. The approach chosen was to set each missing value to be the average of the steps taken at the times at which the missing value occurred. This approach is more local, and I think more reliable, than using the average of the days, especially since missing values occur throughout entire days. We fill in 2404 missing values, 288 for each of 8 days with missing values.
 
+```{r}
+  length(which(is.na(df$steps)))  
+```
+
+This may not be the optimal method, but our approach is to merge two data frames (the original df and the most recent) to create a copy of the original file with missing values filled in, as seen below.
+```{r}
+dframe <- merge(df,dframe2, by = "interval")
+x <- which(is.na(dframe$steps))
+dframe$steps[x] <- dframe$meanSteps[x]
+
+dframe <- dframe %>% select(steps,date,interval)
+
+dframe <- data.frame(dframe)
+
+dframe <- arrange(dframe,date,interval)
+head(dframe)
+```
+Next we create a new histogram from this data and compare it to the original, which excluded missing values.
+
+```{r}
+dframe4 <- dframe %>% group_by(date) %>%
+  summarize(totalSteps = sum(steps))
+
+dframe4 <- data.frame(dframe4)
+hist(dframe4$totalSteps,breaks=30,main = "Histogram",xlab = "Daily Total Steps")
+```
+  Here, we see that the result is more concentrated around 10000, with narrower tails.
+  We also compare the means to those earlier:
+
+```{r}
+  mean(dframe4$totalSteps)
+  median(dframe4$totalSteps)
+```
+The equality here seems suspicious but I can't find my mistake. However, by "averaging out" the data set, we should expect the mean to be unaffected and the median to approach it.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Below we use the orginal data frame created with missing values filled in to create a data frame with a factor variable for weekends and weekdays. We use the "weekdays()" function and merge the new data frame with a easily constructed one matching days of the week to their categories ("Weekday" or "Weekend")
+
+```{r, fig.width = 20, figure.height = 30}
+
+dframe5 <- dframe
+
+dframe5$date <- weekdays(as.Date(dframe5$date))
+
+week <- as.character(c("Monday","Tuesday","Wednesday",
+"Thursday","Friday","Saturday","Sunday"))
+
+cat <- as.character(c(rep("Weekday",5),rep("Weekend",2)))
+
+vf <- cbind(week,cat)
+vf <- data.frame(vf)
+
+names(vf) <- c("date","cat")
+
+mergeTable <- merge(dframe5,vf,by = "date")
+
+mergeTable <- data.frame(mergeTable)
+
+mergeTable$cat <- factor(mergeTable$cat)
+
+mergeTable2 <- mergeTable %>% filter(cat == "Weekday") %>%
+    group_by(interval) %>%
+    summarize(totalSteps = sum(steps))
+
+mergeTable3 <- mergeTable %>% filter(cat == "Weekend") %>%
+  group_by(interval) %>%
+  summarize(totalSteps = sum(steps))
+
+par(mfrow = c(2,1),mai = c(.8,.8,1,.05))
+
+plot(mergeTable2$interval,mergeTable2$totalSteps,type = "l", main = "Weekdays", xlab = "Time (minutes)",ylab = "Steps Taken")
+plot(mergeTable3$interval,mergeTable3$totalSteps,type = "l",main = "Weekends", xlab = "Time (minutes)",ylab = "Steps Taken")
+```
+
+Here we have plotted the line graphs of the subject on weekdays and weekends. At first glance, from this we can that the habits are to walk less early in the day and more in the afternoon and evening. However, the raw numbers are smaller, with less substantial peaks, and a more even spread throughout the later day.
